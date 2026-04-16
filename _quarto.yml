@@ -1,0 +1,31 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Carrier Throttling Analysis"
+  subtitle: "Mobile Broadband Performance and Data Cap Behavior in the US"
+  author: "Troy Altus"
+  date: today
+  date-format: "YYYY"
+  search: true
+
+  chapters:
+    - index.qmd
+    - part: "Part I: Data"
+      chapters:
+        - chapters/01-data-sources.qmd
+        - chapters/02-data-preparation.qmd
+    - part: "Part II: Analysis"
+      chapters:
+        - chapters/03-carrier-overview.qmd
+        - chapters/04-throughput-trends.qmd
+        - chapters/05-throttling-detection.qmd
+
+engine: knitr
+
+format:
+  html:
+    theme: cosmo
+    code-fold: true
+    toc: true

@@ -1,0 +1,142 @@
+---
+title: "Throughput Trends"
+---
+
+## Overview
+
+This chapter models how throughput varies by time, geography, and
+test volume — building intuition for what "normal" mobile performance
+looks like before we search for throttling signals in Chapter 5.
+
+## Setup
+
+```{r}
+#| label: setup
+#| include: false
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(tidyr)
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+
+df <- dbGetQuery(con, "SELECT * FROM ookla_clean")
+df$period_start <- as.Date(df$period_start)
+```
+
+## Quarter-over-Quarter Change
+
+```{r}
+#| label: qoq-change
+qoq <- dbGetQuery(con, "
+  WITH medians AS (
+      SELECT
+          year, quarter, period_start,
+          MEDIAN(avg_d_mbps) AS med_dl
+      FROM ookla_clean
+      GROUP BY year, quarter, period_start
+  )
+  SELECT
+      year, quarter, period_start,
+      med_dl,
+      ROUND(med_dl - LAG(med_dl) OVER (ORDER BY period_start), 2) AS qoq_change,
+      ROUND((med_dl - LAG(med_dl) OVER (ORDER BY period_start))
+            / LAG(med_dl) OVER (ORDER BY period_start) * 100, 1)  AS qoq_pct
+  FROM medians
+  ORDER BY period_start
+")
+qoq$period_start <- as.Date(qoq$period_start)
+qoq
+```
+
+## Speed vs. Test Density
+
+More tests per tile should correlate with denser urban coverage — but are
+denser tiles faster or slower?
+
+```{r}
+#| label: fig-tests-vs-speed
+#| fig-cap: "Download speed vs. test count per tile (2024 Q4)"
+df |>
+    filter(year == 2024, quarter == 4, tests <= 500) |>
+    ggplot(aes(x = tests, y = avg_d_mbps)) +
+    geom_hex(bins = 60) +
+    geom_smooth(method = "loess", color = "red", se = FALSE, linewidth = 0.8) +
+    scale_fill_viridis_c(labels = comma) +
+    scale_y_continuous(labels = label_number(suffix = " Mbps")) +
+    labs(
+        title = "Download Speed vs. Test Count per Tile",
+        subtitle = "2024 Q4 — hex bins, LOESS smoother",
+        x = "Tests per Tile", y = "Avg Download Speed (Mbps)",
+        fill = "Tiles"
+    ) +
+    theme_minimal()
+```
+
+## Speed Distribution by Year
+
+```{r}
+#| label: fig-ridge-dist
+#| fig-cap: "Distribution of download speeds by year"
+df |>
+    mutate(year = factor(year)) |>
+    ggplot(aes(x = avg_d_mbps, fill = year, color = year)) +
+    geom_density(alpha = 0.35, linewidth = 0.6) +
+    scale_x_continuous(limits = c(0, 300),
+                       labels = label_number(suffix = " Mbps")) +
+    labs(
+        title = "Mobile Download Speed Distribution by Year",
+        x = "Download Speed (Mbps)", y = "Density",
+        fill = "Year", color = "Year"
+    ) +
+    theme_minimal()
+```
+
+## High vs. Low Speed Tiles
+
+Classify tiles into speed tiers and track their share over time:
+
+```{r}
+#| label: fig-speed-tiers
+#| fig-cap: "Share of tiles by speed tier over time"
+tiers <- df |>
+    mutate(tier = case_when(
+        avg_d_mbps <  10  ~ "< 10 Mbps (poor)",
+        avg_d_mbps <  25  ~ "10–25 Mbps (basic)",
+        avg_d_mbps < 100  ~ "25–100 Mbps (good)",
+        TRUE              ~ "> 100 Mbps (excellent)"
+    )) |>
+    group_by(period_start, tier) |>
+    summarise(n = n(), .groups = "drop") |>
+    group_by(period_start) |>
+    mutate(share = n / sum(n))
+
+tier_order <- c("< 10 Mbps (poor)", "10–25 Mbps (basic)",
+                "25–100 Mbps (good)", "> 100 Mbps (excellent)")
+tiers$tier <- factor(tiers$tier, levels = tier_order)
+
+ggplot(tiers, aes(x = period_start, y = share, fill = tier)) +
+    geom_area(position = "stack", alpha = 0.85) +
+    scale_y_continuous(labels = percent) +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
+    scale_fill_brewer(palette = "RdYlGn") +
+    labs(
+        title = "US Mobile Speed Tier Distribution Over Time",
+        x = NULL, y = "Share of Tiles", fill = "Tier"
+    ) +
+    theme_minimal()
+```
+
+## Problems
+
+1. The FCC defines "broadband" as 25 Mbps down / 3 Mbps up (recently proposed
+   to raise to 100/20). What share of tiles meet each threshold in each quarter?
+
+2. Fit a simple linear regression of `avg_d_mbps ~ period_start`. What is the
+   estimated quarterly improvement in Mbps? Is this statistically significant?
+
+3. Compute the ratio `avg_d_mbps / avg_u_mbps` (download-to-upload ratio) per
+   tile. How does this ratio vary by speed tier? What does an unusually high
+   ratio suggest about the network?

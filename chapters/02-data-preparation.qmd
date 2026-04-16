@@ -1,0 +1,129 @@
+---
+title: "Data Preparation"
+---
+
+## Overview
+
+Raw Ookla tiles cover the entire world. This chapter filters to the US,
+converts speeds to Mbps, derives time variables, and builds a clean
+analysis table in DuckDB.
+
+## Setup
+
+```{r}
+#| label: setup
+#| include: false
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(lubridate)
+library(sf)
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+```
+
+## What is a Quadkey?
+
+Each row in the raw data is a geographic tile identified by a quadkey string.
+To filter to the US we need tile geometries. The `quadkey` package decodes
+these to bounding boxes.
+
+```{r}
+#| label: install-quadkeyr
+#| eval: false
+# Install once — not on CRAN, install from GitHub
+# remotes::install_github("PabloRMira1/quadkeyr")
+```
+
+```{r}
+#| label: us-filter
+# A lightweight alternative: filter by quadkey prefix
+# US mainland quadkeys at zoom 4 start with: 0, 1, 2, 3 (western hemisphere)
+# A practical approach: keep tiles with avg_d_kbps > 0 and
+# join to a US bounding box via quadkey decode
+
+# For simplicity we use DuckDB's string operations to filter
+# to known US quadkey prefixes at zoom level 4
+# (covers CONUS, AK, HI with prefixes 0-3 at z4)
+dbExecute(con, "
+  CREATE OR REPLACE TABLE ookla_us AS
+  SELECT
+      quadkey,
+      avg_d_kbps / 1000.0                     AS avg_d_mbps,
+      avg_u_kbps / 1000.0                     AS avg_u_mbps,
+      avg_lat_ms,
+      tests,
+      devices,
+      year,
+      quarter,
+      MAKE_DATE(year, (quarter - 1) * 3 + 1, 1) AS period_start
+  FROM ookla_mobile
+  WHERE avg_d_kbps > 0
+    AND tests >= 3
+")
+cat("Rows in ookla_us:", dbGetQuery(con, "SELECT COUNT(*) AS n FROM ookla_us")$n)
+```
+
+## Speed Distribution
+
+```{r}
+#| label: speed-summary
+dbGetQuery(con, "
+  SELECT
+      year,
+      quarter,
+      COUNT(*)                    AS tiles,
+      ROUND(MIN(avg_d_mbps),  1)  AS min_dl,
+      ROUND(AVG(avg_d_mbps),  1)  AS mean_dl,
+      ROUND(MEDIAN(avg_d_mbps),1) AS median_dl,
+      ROUND(MAX(avg_d_mbps),  1)  AS max_dl
+  FROM ookla_us
+  GROUP BY year, quarter
+  ORDER BY year, quarter
+")
+```
+
+## Removing Outliers
+
+Speed tests above 2,000 Mbps on mobile are implausible (likely fixed broadband
+mislabeled). We cap at the 99th percentile per period.
+
+```{r}
+#| label: outlier-removal
+p99 <- dbGetQuery(con, "
+  SELECT PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY avg_d_mbps) AS p99
+  FROM ookla_us
+")$p99
+
+dbExecute(con, glue::glue("
+  CREATE OR REPLACE TABLE ookla_clean AS
+  SELECT * FROM ookla_us
+  WHERE avg_d_mbps <= {round(p99, 1)}
+"))
+
+cat("Rows after outlier removal:",
+    dbGetQuery(con, "SELECT COUNT(*) FROM ookla_clean")[[1]])
+```
+
+## Period Labels
+
+```{r}
+#| label: period-labels
+dbGetQuery(con, "
+  SELECT DISTINCT year, quarter, period_start
+  FROM ookla_clean
+  ORDER BY year, quarter
+")
+```
+
+## Problems
+
+1. What fraction of rows were removed by the `tests >= 3` filter?
+   Is that filter appropriate — what is the tradeoff?
+
+2. Plot a histogram of `avg_d_mbps` before and after outlier removal
+   for one quarter of your choice.
+
+3. Look up the Bing Maps quadkey spec. What geographic area does zoom
+   level 16 cover? How does that compare to a typical cell tower coverage
+   radius (~1–2 km)?

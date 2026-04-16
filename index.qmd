@@ -1,0 +1,46 @@
+---
+title: "Preface"
+number-sections: false
+---
+
+## About This Book
+
+This book investigates mobile carrier throttling behavior in the United States
+using publicly available broadband performance data. The central questions:
+
+- Do carriers deliver the throughput they advertise on "unlimited" plans?
+- Is there evidence of throughput degradation after a usage threshold?
+- Do carriers treat tethered data differently from on-device data?
+
+## Data Sources
+
+| Source | What it provides |
+|---|---|
+| **Ookla Open Data** | Quarterly tile-aggregated speed test results by operator, 2022–2024 |
+| **FCC Measuring Broadband America** | Panel mobile performance data with ISP metadata |
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| R 4.5.3 + tidyverse | Data wrangling and visualization |
+| `arrow` | Reading Parquet files from S3 |
+| `duckdb` | In-process SQL on large datasets |
+| `sf` | Spatial operations on tile geometries |
+| `changepoint` | Statistical detection of throughput breakpoints |
+| AWS CLI | Fetching raw data from public S3 buckets |
+
+## Setup
+
+Restore the exact package environment:
+
+```r
+renv::restore()
+```
+
+Then fetch raw data (run once):
+
+```bash
+Rscript data-raw/fetch_ookla.sh
+Rscript data-raw/fetch_fcc.R
+```

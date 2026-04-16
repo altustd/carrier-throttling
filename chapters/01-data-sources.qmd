@@ -1,0 +1,108 @@
+---
+title: "Data Sources and Ingestion"
+---
+
+## Overview
+
+This chapter fetches raw data from two public sources, loads it into DuckDB,
+and verifies schema and coverage before analysis.
+
+## Fetching Ookla Data via AWS CLI
+
+The Ookla Open Dataset is hosted in a public S3 bucket — no AWS account needed.
+Run once from the project root:
+
+```bash
+bash data-raw/fetch_ookla.sh
+```
+
+This downloads one Parquet file per quarter (~200 MB each) for 2022–2024:
+
+```
+data/ookla/
+  year=2022/quarter=1/2022-01-01_performance_mobile_tiles.parquet
+  year=2022/quarter=2/...
+  ...
+  year=2024/quarter=4/...
+```
+
+**Why AWS CLI here instead of R?**
+`aws s3 cp --recursive` handles retries, partial downloads, and progress
+reporting better than a bare `download.file()`. It also makes the data
+provenance explicit — you can see exactly what bucket and path the files
+came from.
+
+## Loading into DuckDB with arrow
+
+```{r}
+#| label: setup
+library(DBI)
+library(duckdb)
+library(arrow)
+library(dplyr)
+library(sf)
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+```
+
+```{r}
+#| label: load-ookla
+#| message: false
+parquet_dir <- "../data/ookla"
+
+if ("ookla_mobile" %in% dbListTables(con)) {
+  message("Table already loaded — skipping.")
+} else {
+  ds <- open_dataset(parquet_dir, partitioning = c("year", "quarter"))
+  ookla_df <- ds |>
+    select(quadkey, avg_d_kbps, avg_u_kbps, avg_lat_ms,
+           tests, devices, year, quarter) |>
+    collect()
+  dbWriteTable(con, "ookla_mobile", ookla_df)
+  message("Loaded ", nrow(ookla_df), " rows into ookla_mobile")
+}
+```
+
+## Schema and Coverage
+
+```{sql connection=con}
+DESCRIBE ookla_mobile;
+```
+
+```{sql connection=con}
+SELECT
+    year,
+    quarter,
+    COUNT(*)                          AS tiles,
+    ROUND(AVG(avg_d_kbps) / 1000, 2) AS avg_down_mbps,
+    ROUND(AVG(avg_u_kbps) / 1000, 2) AS avg_up_mbps,
+    ROUND(AVG(avg_lat_ms), 1)         AS avg_latency_ms
+FROM ookla_mobile
+GROUP BY year, quarter
+ORDER BY year, quarter;
+```
+
+## Data Dictionary
+
+| Column | Type | Description |
+|---|---|---|
+| `quadkey` | VARCHAR | Bing Maps tile ID at zoom level 16 (~600m tiles) |
+| `avg_d_kbps` | INTEGER | Mean download speed across all tests in tile (kbps) |
+| `avg_u_kbps` | INTEGER | Mean upload speed (kbps) |
+| `avg_lat_ms` | INTEGER | Mean latency (ms) |
+| `tests` | INTEGER | Number of speed tests in tile |
+| `devices` | INTEGER | Unique devices tested |
+| `year` / `quarter` | INTEGER | Partition columns added at ingest |
+
+## About Quadkeys
+
+Ookla tiles use the [Bing Maps quadkey](https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system)
+system at zoom level 16. Each tile covers roughly 600m × 600m at mid-latitudes.
+The `sf` package can convert these to geometries for spatial joins.
+
+## Problems
+
+1. How many unique tiles appear in every quarter of the dataset (consistent coverage)?
+2. Which quarter has the highest average test count per tile?
+3. Run `aws s3 ls s3://ookla-open-data/parquet/performance/type=fixed/ --no-sign-request`
+   and compare the fixed broadband schema to the mobile schema.

@@ -1,0 +1,9 @@
+data/
+_book/
+.quarto/
+renv/library/
+renv/staging/
+.Rhistory
+.RData
+*.duckdb
+*.duckdb.wal

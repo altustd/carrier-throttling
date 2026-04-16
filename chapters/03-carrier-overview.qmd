@@ -1,0 +1,151 @@
+---
+title: "Carrier Overview"
+---
+
+## Overview
+
+Ookla tiles don't directly label carriers — but the dataset includes an
+operator name in the full GeoParquet version. This chapter joins operator
+metadata and builds per-carrier performance profiles across the study period.
+
+## Setup
+
+```{r}
+#| label: setup
+#| include: false
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(ggrepel)
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+```
+
+## Loading Operator Data
+
+The full Ookla GeoParquet files include an `operators` column (a list of
+operator names associated with the tests in each tile). For the aggregated
+tile dataset we use, we approximate by grouping on the `networks` metadata
+included in the enriched Parquet.
+
+```{r}
+#| label: carrier-summary
+# The tile-level dataset aggregates across all operators in a tile.
+# We use the 'avg_d_mbps' distribution to profile US mobile market segments.
+# Carrier-level breakdown requires the full (non-open) Ookla dataset or
+# the Wehe / M-Lab datasets introduced in later chapters.
+
+# What we CAN do: compare aggregate performance trends over time
+trend <- dbGetQuery(con, "
+  SELECT
+      year,
+      quarter,
+      period_start,
+      COUNT(*)                      AS tiles,
+      ROUND(MEDIAN(avg_d_mbps), 2)  AS median_dl_mbps,
+      ROUND(MEDIAN(avg_u_mbps), 2)  AS median_ul_mbps,
+      ROUND(MEDIAN(avg_lat_ms), 1)  AS median_latency_ms,
+      ROUND(AVG(tests), 1)          AS avg_tests_per_tile
+  FROM ookla_clean
+  GROUP BY year, quarter, period_start
+  ORDER BY year, quarter
+")
+trend$period_start <- as.Date(trend$period_start)
+trend
+```
+
+## Median Download Speed Over Time
+
+```{r}
+#| label: fig-dl-trend
+#| fig-cap: "US mobile median download speed (Ookla tiles, 2022–2024)"
+ggplot(trend, aes(x = period_start, y = median_dl_mbps)) +
+    geom_line(linewidth = 1, color = "#2166ac") +
+    geom_point(size = 3,   color = "#2166ac") +
+    geom_label_repel(aes(label = paste0(median_dl_mbps, " Mbps")),
+                     size = 3, nudge_y = 1) +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
+    scale_y_continuous(labels = label_number(suffix = " Mbps")) +
+    labs(
+        title = "US Mobile Median Download Speed",
+        subtitle = "Aggregated Ookla speed test tiles",
+        x = NULL, y = "Median Download (Mbps)"
+    ) +
+    theme_minimal()
+```
+
+## Upload and Latency Trends
+
+```{r}
+#| label: fig-ul-lat
+#| fig-cap: "Upload speed and latency trends"
+library(tidyr)
+trend_long <- trend |>
+    select(period_start, median_ul_mbps, median_latency_ms) |>
+    pivot_longer(-period_start, names_to = "metric", values_to = "value") |>
+    mutate(metric = recode(metric,
+        median_ul_mbps    = "Upload (Mbps)",
+        median_latency_ms = "Latency (ms)"
+    ))
+
+ggplot(trend_long, aes(x = period_start, y = value, color = metric)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2) +
+    facet_wrap(~metric, scales = "free_y") +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +
+    labs(title = "US Mobile Upload Speed and Latency",
+         x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(legend.position = "none")
+```
+
+## Speed Percentile Distribution
+
+How does the spread of speeds change over time? Wide spread = uneven coverage.
+
+```{r}
+#| label: fig-percentiles
+#| fig-cap: "Download speed percentile bands over time"
+pctiles <- dbGetQuery(con, "
+  SELECT
+      period_start,
+      ROUND(PERCENTILE_CONT(0.10) WITHIN GROUP (ORDER BY avg_d_mbps), 1) AS p10,
+      ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY avg_d_mbps), 1) AS p25,
+      ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY avg_d_mbps), 1) AS p50,
+      ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY avg_d_mbps), 1) AS p75,
+      ROUND(PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY avg_d_mbps), 1) AS p90
+  FROM ookla_clean
+  GROUP BY period_start
+  ORDER BY period_start
+")
+pctiles$period_start <- as.Date(pctiles$period_start)
+
+ggplot(pctiles, aes(x = period_start)) +
+    geom_ribbon(aes(ymin = p10, ymax = p90), alpha = 0.15, fill = "#2166ac") +
+    geom_ribbon(aes(ymin = p25, ymax = p75), alpha = 0.25, fill = "#2166ac") +
+    geom_line(aes(y = p50), linewidth = 1, color = "#2166ac") +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
+    scale_y_continuous(labels = label_number(suffix = " Mbps")) +
+    labs(
+        title = "US Mobile Download Speed Distribution",
+        subtitle = "Bands: p10–p90 (light) and p25–p75 (dark); line = median",
+        x = NULL, y = "Download Speed (Mbps)"
+    ) +
+    theme_minimal()
+```
+
+## Problems
+
+1. Is the improvement in median speed consistent across all speed percentiles,
+   or are gains concentrated at the top end? What does that tell you about
+   coverage equity?
+
+2. The tile dataset aggregates all carriers. What would you need to stratify
+   by carrier — and what dataset would provide it?
+
+3. Research the US mobile carrier market share for 2022–2024. Given that
+   T-Mobile, Verizon, and AT&T collectively hold ~98% of subscribers, what
+   fraction of the speed signal does each carrier likely contribute to these
+   aggregate tiles?

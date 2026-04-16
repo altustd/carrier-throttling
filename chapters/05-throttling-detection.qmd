@@ -1,0 +1,204 @@
+---
+title: "Throttling Detection"
+---
+
+## Overview
+
+Carriers typically advertise "unlimited" data but state in fine print that
+speeds may be reduced after a usage threshold (commonly 50–100 GB/month).
+This chapter introduces the statistical methods for detecting such breakpoints
+and applies them to throughput time series.
+
+**Important caveat:** The Ookla tile dataset aggregates all tests in a tile
+across all users — it cannot directly observe a single user's data consumption.
+What we *can* detect:
+
+- Structural breaks in aggregate throughput (e.g. after carrier policy changes)
+- Tiles where throughput is persistently below expected given network density
+- Anomalous quarter-over-quarter drops that don't match national trends
+
+True per-user throttle detection requires the Wehe or M-Lab datasets
+(introduced at the end of this chapter).
+
+## Setup
+
+```{r}
+#| label: setup
+#| include: false
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(changepoint)
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+
+trend <- dbGetQuery(con, "
+  SELECT
+      period_start,
+      MEDIAN(avg_d_mbps) AS median_dl,
+      PERCENTILE_CONT(0.10) WITHIN GROUP (ORDER BY avg_d_mbps) AS p10_dl,
+      PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY avg_d_mbps) AS p25_dl,
+      PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY avg_d_mbps) AS p75_dl
+  FROM ookla_clean
+  GROUP BY period_start
+  ORDER BY period_start
+")
+trend$period_start <- as.Date(trend$period_start)
+```
+
+## Change-Point Detection on Aggregate Throughput
+
+`changepoint::cpt.mean()` tests whether the mean of a time series shifts at
+any point. A detected change-point suggests a structural shift — which could
+be a carrier policy change, a spectrum auction result, or network investment.
+
+```{r}
+#| label: changepoint-analysis
+#| fig-cap: "Change-point detection on median US mobile download speed"
+speed_ts <- trend$median_dl
+
+cpt_result <- cpt.mean(speed_ts, method = "PELT", penalty = "BIC")
+cpt_idx    <- cpts(cpt_result)
+
+cat("Change points detected at index:", cpt_idx, "\n")
+if (length(cpt_idx) > 0) {
+  cat("Corresponding dates:", format(trend$period_start[cpt_idx]), "\n")
+}
+
+# Plot
+trend$segment <- cumsum(c(0, diff(seq_along(speed_ts)) %in% cpt_idx))
+ggplot(trend, aes(x = period_start, y = median_dl)) +
+    geom_ribbon(aes(ymin = p25_dl, ymax = p75_dl), alpha = 0.15, fill = "#2166ac") +
+    geom_line(linewidth = 0.8, color = "#2166ac") +
+    geom_point(size = 2.5,    color = "#2166ac") +
+    {if (length(cpt_idx) > 0)
+        geom_vline(xintercept = trend$period_start[cpt_idx],
+                   linetype = "dashed", color = "red", linewidth = 0.8)
+    } +
+    scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
+    scale_y_continuous(labels = label_number(suffix = " Mbps")) +
+    labs(
+        title = "Change-Point Detection: US Mobile Median Download Speed",
+        subtitle = "Red dashed lines = detected structural breaks (PELT/BIC)",
+        x = NULL, y = "Median Download (Mbps)"
+    ) +
+    theme_minimal()
+```
+
+## Variance Change Detection
+
+Speed improvements can mask increasing *variance* — meaning some users are
+getting much faster while others stay slow (consistent with throttling behavior).
+
+```{r}
+#| label: variance-changepoint
+#| fig-cap: "Change-point detection on speed variance"
+var_ts <- dbGetQuery(con, "
+  SELECT period_start, STDDEV(avg_d_mbps) AS sd_dl
+  FROM ookla_clean
+  GROUP BY period_start
+  ORDER BY period_start
+")$sd_dl
+
+cpt_var <- cpt.var(var_ts, method = "PELT", penalty = "BIC")
+cat("Variance change points at indices:", cpts(cpt_var), "\n")
+```
+
+## Simulating Per-User Throttle Signatures
+
+To understand what throttle detection looks like at the user level, we simulate
+a throughput time series that crosses a throttle threshold:
+
+```{r}
+#| label: fig-throttle-sim
+#| fig-cap: "Simulated user throughput with throttle at 50 GB threshold"
+set.seed(42)
+n_days     <- 30
+threshold  <- 50   # GB
+gb_per_day <- 2.5  # average daily consumption
+
+usage <- cumsum(rnorm(n_days, mean = gb_per_day, sd = 0.4))
+speed <- ifelse(usage < threshold,
+                rnorm(n_days, mean = 80, sd = 8),   # pre-throttle: ~80 Mbps
+                rnorm(n_days, mean = 5,  sd = 1))   # post-throttle: ~5 Mbps
+
+sim <- data.frame(
+    day   = 1:n_days,
+    usage = usage,
+    speed = pmax(speed, 0.5)
+)
+throttle_day <- which(usage >= threshold)[1]
+
+ggplot(sim, aes(x = day, y = speed)) +
+    geom_line(color = "#2166ac", linewidth = 0.8) +
+    geom_point(size = 2, color = "#2166ac") +
+    geom_vline(xintercept = throttle_day, linetype = "dashed",
+               color = "red", linewidth = 0.9) +
+    annotate("text", x = throttle_day + 0.5, y = max(sim$speed) * 0.9,
+             label = paste0("Threshold crossed\n(day ", throttle_day, ")"),
+             hjust = 0, size = 3.5, color = "red") +
+    scale_y_continuous(labels = label_number(suffix = " Mbps")) +
+    labs(
+        title = "Simulated User Throughput with Data Cap Throttle",
+        subtitle = paste0("50 GB threshold; ~", round(gb_per_day, 1), " GB/day usage"),
+        x = "Day of Month", y = "Download Speed (Mbps)"
+    ) +
+    theme_minimal()
+```
+
+## Regression Discontinuity Design
+
+If you know the stated threshold (e.g. 50 GB), RDD is the cleanest estimator
+of the causal throttle effect — it compares users just below vs. just above
+the limit:
+
+```{r}
+#| label: rdd-concept
+# Conceptual RDD setup (requires per-user data from Wehe/M-Lab)
+# With: df having columns `usage_gb` and `speed_mbps`
+#
+# library(rdrobust)
+# rdd_result <- rdrobust(y = df$speed_mbps,
+#                        x = df$usage_gb,
+#                        c = 50)          # cutoff = 50 GB
+# summary(rdd_result)
+#
+# The RDD estimator gives the discontinuous jump in speed at the threshold.
+# A large negative jump is evidence of a hard throttle policy.
+
+cat("RDD requires per-user data. See next steps for Wehe/M-Lab integration.")
+```
+
+## Next Steps: Wehe and M-Lab
+
+The Ookla tile data establishes the market-level baseline. To detect
+app-specific or user-level throttling:
+
+| Dataset | How to access | What it adds |
+|---|---|---|
+| **Wehe** | `https://dd.meddle.mobi/wehe.html` | Per-test throttle flag, app-specific, carrier metadata |
+| **M-Lab NDT** | BigQuery `measurement-lab.ndt.unified_downloads` | Per-test download speed with ASN (carrier) |
+| **FCC MBA** | `data/fcc/` (from `fetch_fcc.R`) | Panel tests on fixed devices; known carrier |
+
+```r
+# M-Lab via BigQuery (requires Google Cloud free tier)
+# library(bigrquery)
+# con_bq <- dbConnect(bigquery(),
+#                     project = "your-project-id",
+#                     dataset = "measurement-lab.ndt")
+```
+
+## Problems
+
+1. Apply `cpt.meanvar()` instead of `cpt.mean()` — does it detect additional
+   breakpoints? What does a mean+variance change suggest vs. mean-only?
+
+2. Look up the dates of the T-Mobile/Sprint merger completion and T-Mobile's
+   5G mid-band rollout milestones. Do any detected change-points align?
+
+3. Design a study using the Wehe dataset to test whether YouTube traffic is
+   throttled differently than a generic HTTPS download on the same carrier.
+   What statistical test would you use? What confounders would you need to
+   control for?
