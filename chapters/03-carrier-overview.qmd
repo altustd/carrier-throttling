@@ -20,6 +20,8 @@ library(ggplot2)
 library(scales)
 library(ggrepel)
 
+source("../site_theme.R")
+
 con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
 ```
 
@@ -62,8 +64,8 @@ trend
 #| label: fig-dl-trend
 #| fig-cap: "US mobile median download speed (Ookla tiles, 2022–2024)"
 ggplot(trend, aes(x = period_start, y = median_dl_mbps)) +
-    geom_line(linewidth = 1, color = "#2166ac") +
-    geom_point(size = 3,   color = "#2166ac") +
+    geom_line(linewidth = 1, color = SITE_BLUE) +
+    geom_point(size = 3,   color = SITE_BLUE) +
     geom_label_repel(aes(label = paste0(median_dl_mbps, " Mbps")),
                      size = 3, nudge_y = 1) +
     scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
@@ -73,7 +75,7 @@ ggplot(trend, aes(x = period_start, y = median_dl_mbps)) +
         subtitle = "Aggregated Ookla speed test tiles",
         x = NULL, y = "Median Download (Mbps)"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## Upload and Latency Trends
@@ -97,7 +99,7 @@ ggplot(trend_long, aes(x = period_start, y = value, color = metric)) +
     scale_x_date(date_labels = "%b %Y", date_breaks = "6 months") +
     labs(title = "US Mobile Upload Speed and Latency",
          x = NULL, y = NULL) +
-    theme_minimal() +
+    theme_site() +
     theme(legend.position = "none")
 ```
 
@@ -123,9 +125,9 @@ pctiles <- dbGetQuery(con, "
 pctiles$period_start <- as.Date(pctiles$period_start)
 
 ggplot(pctiles, aes(x = period_start)) +
-    geom_ribbon(aes(ymin = p10, ymax = p90), alpha = 0.15, fill = "#2166ac") +
-    geom_ribbon(aes(ymin = p25, ymax = p75), alpha = 0.25, fill = "#2166ac") +
-    geom_line(aes(y = p50), linewidth = 1, color = "#2166ac") +
+    geom_ribbon(aes(ymin = p10, ymax = p90), alpha = 0.15, fill = SITE_BLUE) +
+    geom_ribbon(aes(ymin = p25, ymax = p75), alpha = 0.25, fill = SITE_BLUE) +
+    geom_line(aes(y = p50), linewidth = 1, color = SITE_BLUE) +
     scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
     scale_y_continuous(labels = label_number(suffix = " Mbps")) +
     labs(
@@ -133,7 +135,7 @@ ggplot(pctiles, aes(x = period_start)) +
         subtitle = "Bands: p10–p90 (light) and p25–p75 (dark); line = median",
         x = NULL, y = "Download Speed (Mbps)"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## Problems

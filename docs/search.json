@@ -1,0 +1,459 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Carrier Throttling Analysis",
+    "section": "",
+    "text": "About This Book\nThis book investigates mobile carrier throttling behavior in the United States using publicly available broadband performance data. The central questions:",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Preface</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#about-this-book",
+    "href": "index.html#about-this-book",
+    "title": "Carrier Throttling Analysis",
+    "section": "",
+    "text": "Do carriers deliver the throughput they advertise on “unlimited” plans?\nIs there evidence of throughput degradation after a usage threshold?\nDo carriers treat tethered data differently from on-device data?",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Preface</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#data-sources",
+    "href": "index.html#data-sources",
+    "title": "Carrier Throttling Analysis",
+    "section": "Data Sources",
+    "text": "Data Sources\n\n\n\n\n\n\n\nSource\nWhat it provides\n\n\n\n\nOokla Open Data\nQuarterly tile-aggregated speed test results by operator, 2022–2024\n\n\nFCC Measuring Broadband America\nPanel mobile performance data with ISP metadata",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Preface</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#tools",
+    "href": "index.html#tools",
+    "title": "Carrier Throttling Analysis",
+    "section": "Tools",
+    "text": "Tools\n\n\n\nTool\nPurpose\n\n\n\n\nR 4.5.3 + tidyverse\nData wrangling and visualization\n\n\narrow\nReading Parquet files from S3\n\n\nduckdb\nIn-process SQL on large datasets\n\n\nsf\nSpatial operations on tile geometries\n\n\nchangepoint\nStatistical detection of throughput breakpoints\n\n\nAWS CLI\nFetching raw data from public S3 buckets",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Preface</span>"
+    ]
+  },
+  {
+    "objectID": "index.html#setup",
+    "href": "index.html#setup",
+    "title": "Carrier Throttling Analysis",
+    "section": "Setup",
+    "text": "Setup\nRestore the exact package environment:\nrenv::restore()\nThen fetch raw data (run once):\nRscript data-raw/fetch_ookla.sh\nRscript data-raw/fetch_fcc.R",
+    "crumbs": [
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Preface</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html",
+    "href": "chapters/01-data-sources.html",
+    "title": "2  Data Sources and Ingestion",
+    "section": "",
+    "text": "2.1 Overview\nThis chapter fetches raw data from two public sources, loads it into DuckDB, and verifies schema and coverage before analysis.",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html#fetching-ookla-data-via-aws-cli",
+    "href": "chapters/01-data-sources.html#fetching-ookla-data-via-aws-cli",
+    "title": "2  Data Sources and Ingestion",
+    "section": "2.2 Fetching Ookla Data via AWS CLI",
+    "text": "2.2 Fetching Ookla Data via AWS CLI\nThe Ookla Open Dataset is hosted in a public S3 bucket — no AWS account needed. Run once from the project root:\nbash data-raw/fetch_ookla.sh\nThis downloads one Parquet file per quarter (~200 MB each) for 2022–2024:\ndata/ookla/\n  year=2022/quarter=1/2022-01-01_performance_mobile_tiles.parquet\n  year=2022/quarter=2/...\n  ...\n  year=2024/quarter=4/...\nWhy AWS CLI here instead of R? aws s3 cp --recursive handles retries, partial downloads, and progress reporting better than a bare download.file(). It also makes the data provenance explicit — you can see exactly what bucket and path the files came from.",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html#loading-into-duckdb-with-arrow",
+    "href": "chapters/01-data-sources.html#loading-into-duckdb-with-arrow",
+    "title": "2  Data Sources and Ingestion",
+    "section": "2.3 Loading into DuckDB with arrow",
+    "text": "2.3 Loading into DuckDB with arrow",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html#schema-and-coverage",
+    "href": "chapters/01-data-sources.html#schema-and-coverage",
+    "title": "2  Data Sources and Ingestion",
+    "section": "2.4 Schema and Coverage",
+    "text": "2.4 Schema and Coverage\n\n\n\n8 records\n\n\ncolumn_name\ncolumn_type\nnull\nkey\ndefault\nextra\n\n\n\n\nquadkey\nVARCHAR\nYES\nNA\nNA\nNA\n\n\navg_d_kbps\nINTEGER\nYES\nNA\nNA\nNA\n\n\navg_u_kbps\nINTEGER\nYES\nNA\nNA\nNA\n\n\navg_lat_ms\nINTEGER\nYES\nNA\nNA\nNA\n\n\ntests\nINTEGER\nYES\nNA\nNA\nNA\n\n\ndevices\nINTEGER\nYES\nNA\nNA\nNA\n\n\nyear\nINTEGER\nYES\nNA\nNA\nNA\n\n\nquarter\nINTEGER\nYES\nNA\nNA\nNA\n\n\n\n\n\n\n\n\nDisplaying records 1 - 10\n\n\nyear\nquarter\ntiles\navg_down_mbps\navg_up_mbps\navg_latency_ms\n\n\n\n\n2022\n1\n3820724\n62.56\n13.67\n39.3\n\n\n2022\n2\n4027744\n63.40\n13.56\n41.4\n\n\n2022\n3\n4046154\n65.67\n13.74\n42.0\n\n\n2022\n4\n3838065\n71.50\n14.45\n41.7\n\n\n2023\n1\n3728229\n77.57\n15.10\n41.7\n\n\n2023\n2\n3864546\n84.39\n15.54\n41.2\n\n\n2023\n3\n4005796\n90.22\n15.77\n41.3\n\n\n2023\n4\n3771204\n100.43\n16.84\n39.8\n\n\n2024\n1\n3674000\n107.84\n17.45\n39.1\n\n\n2024\n2\n3703161\n108.30\n17.06\n39.9",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html#data-dictionary",
+    "href": "chapters/01-data-sources.html#data-dictionary",
+    "title": "2  Data Sources and Ingestion",
+    "section": "2.5 Data Dictionary",
+    "text": "2.5 Data Dictionary\n\n\n\n\n\n\n\n\nColumn\nType\nDescription\n\n\n\n\nquadkey\nVARCHAR\nBing Maps tile ID at zoom level 16 (~600m tiles)\n\n\navg_d_kbps\nINTEGER\nMean download speed across all tests in tile (kbps)\n\n\navg_u_kbps\nINTEGER\nMean upload speed (kbps)\n\n\navg_lat_ms\nINTEGER\nMean latency (ms)\n\n\ntests\nINTEGER\nNumber of speed tests in tile\n\n\ndevices\nINTEGER\nUnique devices tested\n\n\nyear / quarter\nINTEGER\nPartition columns added at ingest",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html#about-quadkeys",
+    "href": "chapters/01-data-sources.html#about-quadkeys",
+    "title": "2  Data Sources and Ingestion",
+    "section": "2.6 About Quadkeys",
+    "text": "2.6 About Quadkeys\nOokla tiles use the Bing Maps quadkey system at zoom level 16. Each tile covers roughly 600m × 600m at mid-latitudes. The sf package can convert these to geometries for spatial joins.",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/01-data-sources.html#problems",
+    "href": "chapters/01-data-sources.html#problems",
+    "title": "2  Data Sources and Ingestion",
+    "section": "2.7 Problems",
+    "text": "2.7 Problems\n\nHow many unique tiles appear in every quarter of the dataset (consistent coverage)?\nWhich quarter has the highest average test count per tile?\nRun aws s3 ls s3://ookla-open-data/parquet/performance/type=fixed/ --no-sign-request and compare the fixed broadband schema to the mobile schema.",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Data Sources and Ingestion</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html",
+    "href": "chapters/02-data-preparation.html",
+    "title": "3  Data Preparation",
+    "section": "",
+    "text": "3.1 Overview\nRaw Ookla tiles cover the entire world. This chapter filters to the US, converts speeds to Mbps, derives time variables, and builds a clean analysis table in DuckDB.",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html#setup",
+    "href": "chapters/02-data-preparation.html#setup",
+    "title": "3  Data Preparation",
+    "section": "3.2 Setup",
+    "text": "3.2 Setup",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html#what-is-a-quadkey",
+    "href": "chapters/02-data-preparation.html#what-is-a-quadkey",
+    "title": "3  Data Preparation",
+    "section": "3.3 What is a Quadkey?",
+    "text": "3.3 What is a Quadkey?\nEach row in the raw data is a geographic tile identified by a quadkey string. To filter to the US we need tile geometries. The quadkey package decodes these to bounding boxes.\n\n\n[1] 18830917\n\n\nRows in ookla_us: 18830917",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html#speed-distribution",
+    "href": "chapters/02-data-preparation.html#speed-distribution",
+    "title": "3  Data Preparation",
+    "section": "3.4 Speed Distribution",
+    "text": "3.4 Speed Distribution\n\n\n   year quarter   tiles min_dl mean_dl median_dl max_dl\n1  2022       1 1618733      0    67.5      33.5 3942.9\n2  2022       2 1680185      0    69.1      34.2 4079.6\n3  2022       3 1683897      0    71.9      35.4 4073.0\n4  2022       4 1626972      0    78.6      38.9 4036.3\n5  2023       1 1571120      0    86.4      43.9 4046.7\n6  2023       2 1576271      0    95.6      50.0 3961.8\n7  2023       3 1634919      0   101.2      52.7 4018.8\n8  2023       4 1557569      0   110.4      57.9 4127.1\n9  2024       1 1507360      0   116.2      62.0 4069.9\n10 2024       2 1465318      0   116.9      63.4 4200.9\n11 2024       3 1494384      0   116.7      63.8 4601.5\n12 2024       4 1414189      0   122.3      69.1 4554.0",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html#removing-outliers",
+    "href": "chapters/02-data-preparation.html#removing-outliers",
+    "title": "3  Data Preparation",
+    "section": "3.5 Removing Outliers",
+    "text": "3.5 Removing Outliers\nSpeed tests above 2,000 Mbps on mobile are implausible (likely fixed broadband mislabeled). We cap at the 99th percentile per period.\n\n\n[1] 18642596\n\n\nRows after outlier removal: 18642596",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html#period-labels",
+    "href": "chapters/02-data-preparation.html#period-labels",
+    "title": "3  Data Preparation",
+    "section": "3.6 Period Labels",
+    "text": "3.6 Period Labels\n\n\n   year quarter period_start\n1  2022       1   2022-01-01\n2  2022       2   2022-04-01\n3  2022       3   2022-07-01\n4  2022       4   2022-10-01\n5  2023       1   2023-01-01\n6  2023       2   2023-04-01\n7  2023       3   2023-07-01\n8  2023       4   2023-10-01\n9  2024       1   2024-01-01\n10 2024       2   2024-04-01\n11 2024       3   2024-07-01\n12 2024       4   2024-10-01",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/02-data-preparation.html#problems",
+    "href": "chapters/02-data-preparation.html#problems",
+    "title": "3  Data Preparation",
+    "section": "3.7 Problems",
+    "text": "3.7 Problems\n\nWhat fraction of rows were removed by the tests &gt;= 3 filter? Is that filter appropriate — what is the tradeoff?\nPlot a histogram of avg_d_mbps before and after outlier removal for one quarter of your choice.\nLook up the Bing Maps quadkey spec. What geographic area does zoom level 16 cover? How does that compare to a typical cell tower coverage radius (~1–2 km)?",
+    "crumbs": [
+      "Part I: Data",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Data Preparation</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html",
+    "href": "chapters/03-carrier-overview.html",
+    "title": "4  Carrier Overview",
+    "section": "",
+    "text": "4.1 Overview\nOokla tiles don’t directly label carriers — but the dataset includes an operator name in the full GeoParquet version. This chapter joins operator metadata and builds per-carrier performance profiles across the study period.",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html#setup",
+    "href": "chapters/03-carrier-overview.html#setup",
+    "title": "4  Carrier Overview",
+    "section": "4.2 Setup",
+    "text": "4.2 Setup",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html#loading-operator-data",
+    "href": "chapters/03-carrier-overview.html#loading-operator-data",
+    "title": "4  Carrier Overview",
+    "section": "4.3 Loading Operator Data",
+    "text": "4.3 Loading Operator Data\nThe full Ookla GeoParquet files include an operators column (a list of operator names associated with the tests in each tile). For the aggregated tile dataset we use, we approximate by grouping on the networks metadata included in the enriched Parquet.\n\n\n   year quarter period_start   tiles median_dl_mbps median_ul_mbps\n1  2022       1   2022-01-01 1610590          33.25          11.04\n2  2022       2   2022-04-01 1671648          33.98          11.12\n3  2022       3   2022-07-01 1674272          35.13          11.24\n4  2022       4   2022-10-01 1615974          38.52          11.94\n5  2023       1   2023-01-01 1560783          43.43          12.83\n6  2023       2   2023-04-01 1563753          49.33          13.47\n7  2023       3   2023-07-01 1619530          51.94          13.60\n8  2023       4   2023-10-01 1537719          56.68          14.31\n9  2024       1   2024-01-01 1484638          60.44          14.69\n10 2024       2   2024-04-01 1442550          61.71          14.56\n11 2024       3   2024-07-01 1471053          62.15          14.22\n12 2024       4   2024-10-01 1390086          67.07          15.01\n   median_latency_ms avg_tests_per_tile\n1                 31               13.1\n2                 32               13.0\n3                 32               13.2\n4                 32               14.9\n5                 31               14.5\n6                 31               13.6\n7                 31               13.4\n8                 30               13.9\n9                 30               13.5\n10                30               13.0\n11                30               12.9\n12                29               12.8",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html#median-download-speed-over-time",
+    "href": "chapters/03-carrier-overview.html#median-download-speed-over-time",
+    "title": "4  Carrier Overview",
+    "section": "4.4 Median Download Speed Over Time",
+    "text": "4.4 Median Download Speed Over Time\n\n\n\n\n\n\n\n\nFigure 4.1: US mobile median download speed (Ookla tiles, 2022–2024)",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html#upload-and-latency-trends",
+    "href": "chapters/03-carrier-overview.html#upload-and-latency-trends",
+    "title": "4  Carrier Overview",
+    "section": "4.5 Upload and Latency Trends",
+    "text": "4.5 Upload and Latency Trends\n\n\n\n\n\n\n\n\nFigure 4.2: Upload speed and latency trends",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html#speed-percentile-distribution",
+    "href": "chapters/03-carrier-overview.html#speed-percentile-distribution",
+    "title": "4  Carrier Overview",
+    "section": "4.6 Speed Percentile Distribution",
+    "text": "4.6 Speed Percentile Distribution\nHow does the spread of speeds change over time? Wide spread = uneven coverage.\n\n\n\n\n\n\n\n\nFigure 4.3: Download speed percentile bands over time",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-carrier-overview.html#problems",
+    "href": "chapters/03-carrier-overview.html#problems",
+    "title": "4  Carrier Overview",
+    "section": "4.7 Problems",
+    "text": "4.7 Problems\n\nIs the improvement in median speed consistent across all speed percentiles, or are gains concentrated at the top end? What does that tell you about coverage equity?\nThe tile dataset aggregates all carriers. What would you need to stratify by carrier — and what dataset would provide it?\nResearch the US mobile carrier market share for 2022–2024. Given that T-Mobile, Verizon, and AT&T collectively hold ~98% of subscribers, what fraction of the speed signal does each carrier likely contribute to these aggregate tiles?",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Carrier Overview</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html",
+    "href": "chapters/04-throughput-trends.html",
+    "title": "5  Throughput Trends",
+    "section": "",
+    "text": "5.1 Overview\nThis chapter models how throughput varies by time, geography, and test volume — building intuition for what “normal” mobile performance looks like before we search for throttling signals in Chapter 5.",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html#setup",
+    "href": "chapters/04-throughput-trends.html#setup",
+    "title": "5  Throughput Trends",
+    "section": "5.2 Setup",
+    "text": "5.2 Setup",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html#quarter-over-quarter-change",
+    "href": "chapters/04-throughput-trends.html#quarter-over-quarter-change",
+    "title": "5  Throughput Trends",
+    "section": "5.3 Quarter-over-Quarter Change",
+    "text": "5.3 Quarter-over-Quarter Change\n\n\n   year quarter period_start med_dl qoq_change qoq_pct\n1  2022       1   2022-01-01 33.252         NA      NA\n2  2022       2   2022-04-01 33.982       0.73     2.2\n3  2022       3   2022-07-01 35.129       1.15     3.4\n4  2022       4   2022-10-01 38.519       3.39     9.7\n5  2023       1   2023-01-01 43.433       4.91    12.8\n6  2023       2   2023-04-01 49.330       5.90    13.6\n7  2023       3   2023-07-01 51.936       2.61     5.3\n8  2023       4   2023-10-01 56.681       4.74     9.1\n9  2024       1   2024-01-01 60.437       3.76     6.6\n10 2024       2   2024-04-01 61.710       1.27     2.1\n11 2024       3   2024-07-01 62.149       0.44     0.7\n12 2024       4   2024-10-01 67.069       4.92     7.9",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html#speed-vs.-test-density",
+    "href": "chapters/04-throughput-trends.html#speed-vs.-test-density",
+    "title": "5  Throughput Trends",
+    "section": "5.4 Speed vs. Test Density",
+    "text": "5.4 Speed vs. Test Density\nMore tests per tile should correlate with denser urban coverage — but are denser tiles faster or slower?\n\n\n\n\n\n\n\n\nFigure 5.1: Download speed vs. test count per tile (2024 Q4)",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html#speed-distribution-by-year",
+    "href": "chapters/04-throughput-trends.html#speed-distribution-by-year",
+    "title": "5  Throughput Trends",
+    "section": "5.5 Speed Distribution by Year",
+    "text": "5.5 Speed Distribution by Year\n\n\n\n\n\n\n\n\nFigure 5.2: Download speed percentile spread by year (p10 / p25 / median / p75 / p90)",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html#high-vs.-low-speed-tiles",
+    "href": "chapters/04-throughput-trends.html#high-vs.-low-speed-tiles",
+    "title": "5  Throughput Trends",
+    "section": "5.6 High vs. Low Speed Tiles",
+    "text": "5.6 High vs. Low Speed Tiles\nClassify tiles into speed tiers and track their share over time:\n\n\n\n\n\n\n\n\nFigure 5.3: Share of tiles by speed tier over time",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/04-throughput-trends.html#problems",
+    "href": "chapters/04-throughput-trends.html#problems",
+    "title": "5  Throughput Trends",
+    "section": "5.7 Problems",
+    "text": "5.7 Problems\n\nThe FCC defines “broadband” as 25 Mbps down / 3 Mbps up (recently proposed to raise to 100/20). What share of tiles meet each threshold in each quarter?\nFit a simple linear regression of avg_d_mbps ~ period_start. What is the estimated quarterly improvement in Mbps? Is this statistically significant?\nCompute the ratio avg_d_mbps / avg_u_mbps (download-to-upload ratio) per tile. How does this ratio vary by speed tier? What does an unusually high ratio suggest about the network?",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Throughput Trends</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html",
+    "href": "chapters/05-throttling-detection.html",
+    "title": "6  Throttling Detection",
+    "section": "",
+    "text": "6.1 Overview\nCarriers typically advertise “unlimited” data but state in fine print that speeds may be reduced after a usage threshold (commonly 50–100 GB/month). This chapter introduces the statistical methods for detecting such breakpoints and applies them to throughput time series.\nImportant caveat: The Ookla tile dataset aggregates all tests in a tile across all users — it cannot directly observe a single user’s data consumption. What we can detect:\nTrue per-user throttle detection requires the Wehe or M-Lab datasets (introduced at the end of this chapter).",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#overview",
+    "href": "chapters/05-throttling-detection.html#overview",
+    "title": "6  Throttling Detection",
+    "section": "",
+    "text": "Structural breaks in aggregate throughput (e.g. after carrier policy changes)\nTiles where throughput is persistently below expected given network density\nAnomalous quarter-over-quarter drops that don’t match national trends",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#setup",
+    "href": "chapters/05-throttling-detection.html#setup",
+    "title": "6  Throttling Detection",
+    "section": "6.2 Setup",
+    "text": "6.2 Setup",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#change-point-detection-on-aggregate-throughput",
+    "href": "chapters/05-throttling-detection.html#change-point-detection-on-aggregate-throughput",
+    "title": "6  Throttling Detection",
+    "section": "6.3 Change-Point Detection on Aggregate Throughput",
+    "text": "6.3 Change-Point Detection on Aggregate Throughput\nchangepoint::cpt.mean() tests whether the mean of a time series shifts at any point. A detected change-point suggests a structural shift — which could be a carrier policy change, a spectrum auction result, or network investment.\n\n\nChange points detected at index: 3 4 5 7 8 11 \n\n\nCorresponding dates: 2022-07-01 2022-10-01 2023-01-01 2023-07-01 2023-10-01 2024-07-01 \n\n\n\n\n\nChange-point detection on median US mobile download speed",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#variance-change-detection",
+    "href": "chapters/05-throttling-detection.html#variance-change-detection",
+    "title": "6  Throttling Detection",
+    "section": "6.4 Variance Change Detection",
+    "text": "6.4 Variance Change Detection\nSpeed improvements can mask increasing variance — meaning some users are getting much faster while others stay slow (consistent with throttling behavior).\n\n\nVariance change points at indices:",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#simulating-per-user-throttle-signatures",
+    "href": "chapters/05-throttling-detection.html#simulating-per-user-throttle-signatures",
+    "title": "6  Throttling Detection",
+    "section": "6.5 Simulating Per-User Throttle Signatures",
+    "text": "6.5 Simulating Per-User Throttle Signatures\nTo understand what throttle detection looks like at the user level, we simulate a throughput time series that crosses a throttle threshold:\n\n\n\n\n\n\n\n\nFigure 6.1: Simulated user throughput with throttle at 50 GB threshold",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#regression-discontinuity-design",
+    "href": "chapters/05-throttling-detection.html#regression-discontinuity-design",
+    "title": "6  Throttling Detection",
+    "section": "6.6 Regression Discontinuity Design",
+    "text": "6.6 Regression Discontinuity Design\nIf you know the stated threshold (e.g. 50 GB), RDD is the cleanest estimator of the causal throttle effect — it compares users just below vs. just above the limit:\n\n\nRDD requires per-user data. See next steps for Wehe/M-Lab integration.",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#next-steps-wehe-and-m-lab",
+    "href": "chapters/05-throttling-detection.html#next-steps-wehe-and-m-lab",
+    "title": "6  Throttling Detection",
+    "section": "6.7 Next Steps: Wehe and M-Lab",
+    "text": "6.7 Next Steps: Wehe and M-Lab\nThe Ookla tile data establishes the market-level baseline. To detect app-specific or user-level throttling:\n\n\n\n\n\n\n\n\nDataset\nHow to access\nWhat it adds\n\n\n\n\nWehe\nhttps://dd.meddle.mobi/wehe.html\nPer-test throttle flag, app-specific, carrier metadata\n\n\nM-Lab NDT\nBigQuery measurement-lab.ndt.unified_downloads\nPer-test download speed with ASN (carrier)\n\n\nFCC MBA\ndata/fcc/ (from fetch_fcc.R)\nPanel tests on fixed devices; known carrier\n\n\n\n# M-Lab via BigQuery (requires Google Cloud free tier)\n# library(bigrquery)\n# con_bq &lt;- dbConnect(bigquery(),\n#                     project = \"your-project-id\",\n#                     dataset = \"measurement-lab.ndt\")",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/05-throttling-detection.html#problems",
+    "href": "chapters/05-throttling-detection.html#problems",
+    "title": "6  Throttling Detection",
+    "section": "6.8 Problems",
+    "text": "6.8 Problems\n\nApply cpt.meanvar() instead of cpt.mean() — does it detect additional breakpoints? What does a mean+variance change suggest vs. mean-only?\nLook up the dates of the T-Mobile/Sprint merger completion and T-Mobile’s 5G mid-band rollout milestones. Do any detected change-points align?\nDesign a study using the Wehe dataset to test whether YouTube traffic is throttled differently than a generic HTTPS download on the same carrier. What statistical test would you use? What confounders would you need to control for?",
+    "crumbs": [
+      "Part II: Analysis",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Throttling Detection</span>"
+    ]
+  }
+]

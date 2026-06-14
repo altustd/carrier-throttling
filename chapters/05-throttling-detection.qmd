@@ -32,7 +32,9 @@ library(ggplot2)
 library(scales)
 library(changepoint)
 
-con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+source("../site_theme.R")
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb", read_only = TRUE)
 
 trend <- dbGetQuery(con, "
   SELECT
@@ -70,9 +72,9 @@ if (length(cpt_idx) > 0) {
 # Plot
 trend$segment <- cumsum(c(0, diff(seq_along(speed_ts)) %in% cpt_idx))
 ggplot(trend, aes(x = period_start, y = median_dl)) +
-    geom_ribbon(aes(ymin = p25_dl, ymax = p75_dl), alpha = 0.15, fill = "#2166ac") +
-    geom_line(linewidth = 0.8, color = "#2166ac") +
-    geom_point(size = 2.5,    color = "#2166ac") +
+    geom_ribbon(aes(ymin = p25_dl, ymax = p75_dl), alpha = 0.15, fill = SITE_BLUE) +
+    geom_line(linewidth = 0.8, color = SITE_BLUE) +
+    geom_point(size = 2.5,    color = SITE_BLUE) +
     {if (length(cpt_idx) > 0)
         geom_vline(xintercept = trend$period_start[cpt_idx],
                    linetype = "dashed", color = "red", linewidth = 0.8)
@@ -84,7 +86,7 @@ ggplot(trend, aes(x = period_start, y = median_dl)) +
         subtitle = "Red dashed lines = detected structural breaks (PELT/BIC)",
         x = NULL, y = "Median Download (Mbps)"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## Variance Change Detection
@@ -132,20 +134,20 @@ sim <- data.frame(
 throttle_day <- which(usage >= threshold)[1]
 
 ggplot(sim, aes(x = day, y = speed)) +
-    geom_line(color = "#2166ac", linewidth = 0.8) +
-    geom_point(size = 2, color = "#2166ac") +
+    geom_line(color = SITE_BLUE, linewidth = 0.8) +
+    geom_point(size = 2, color = SITE_BLUE) +
     geom_vline(xintercept = throttle_day, linetype = "dashed",
-               color = "red", linewidth = 0.9) +
+               color = SITE_CORAL, linewidth = 0.9) +
     annotate("text", x = throttle_day + 0.5, y = max(sim$speed) * 0.9,
              label = paste0("Threshold crossed\n(day ", throttle_day, ")"),
-             hjust = 0, size = 3.5, color = "red") +
+             hjust = 0, size = 3.5, color = SITE_CORAL) +
     scale_y_continuous(labels = label_number(suffix = " Mbps")) +
     labs(
         title = "Simulated User Throughput with Data Cap Throttle",
         subtitle = paste0("50 GB threshold; ~", round(gb_per_day, 1), " GB/day usage"),
         x = "Day of Month", y = "Download Speed (Mbps)"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## Regression Discontinuity Design

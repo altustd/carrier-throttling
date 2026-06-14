@@ -20,10 +20,9 @@ library(ggplot2)
 library(scales)
 library(tidyr)
 
-con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
+source("../site_theme.R")
 
-df <- dbGetQuery(con, "SELECT * FROM ookla_clean")
-df$period_start <- as.Date(df$period_start)
+con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb", read_only = TRUE)
 ```
 
 ## Quarter-over-Quarter Change
@@ -59,39 +58,72 @@ denser tiles faster or slower?
 ```{r}
 #| label: fig-tests-vs-speed
 #| fig-cap: "Download speed vs. test count per tile (2024 Q4)"
-df |>
-    filter(year == 2024, quarter == 4, tests <= 500) |>
-    ggplot(aes(x = tests, y = avg_d_mbps)) +
-    geom_hex(bins = 60) +
-    geom_smooth(method = "loess", color = "red", se = FALSE, linewidth = 0.8) +
-    scale_fill_viridis_c(labels = comma) +
+# Pre-bin both axes in SQL: 10-test buckets vs 5 Mbps buckets
+df_q4 <- dbGetQuery(con, "
+  SELECT
+      FLOOR(tests / 10) * 10        AS test_bin,
+      FLOOR(avg_d_mbps / 5) * 5     AS speed_bin,
+      COUNT(*)                       AS n,
+      AVG(avg_d_mbps)                AS avg_speed
+  FROM ookla_clean
+  WHERE year = 2024 AND quarter = 4 AND tests <= 500
+  GROUP BY test_bin, speed_bin
+  ORDER BY test_bin, speed_bin
+")
+
+# Smooth trend: mean speed per test bucket
+trend_q4 <- df_q4 |>
+    group_by(test_bin) |>
+    summarise(avg_speed = weighted.mean(avg_speed, n), .groups = "drop")
+
+ggplot(df_q4, aes(x = test_bin, y = speed_bin)) +
+    geom_tile(aes(fill = n)) +
+    geom_line(data = trend_q4, aes(x = test_bin, y = avg_speed),
+              color = SITE_CORAL, linewidth = 1.2, inherit.aes = FALSE) +
+    scale_fill_gradientn(colors = c("#f0ede8", "#b8d4f0", "#185FA5"),
+                         labels = comma) +
     scale_y_continuous(labels = label_number(suffix = " Mbps")) +
     labs(
         title = "Download Speed vs. Test Count per Tile",
-        subtitle = "2024 Q4 — hex bins, LOESS smoother",
+        subtitle = "2024 Q4 — binned tile counts; red line = mean speed per bucket",
         x = "Tests per Tile", y = "Avg Download Speed (Mbps)",
         fill = "Tiles"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## Speed Distribution by Year
 
 ```{r}
 #| label: fig-ridge-dist
-#| fig-cap: "Distribution of download speeds by year"
-df |>
-    mutate(year = factor(year)) |>
-    ggplot(aes(x = avg_d_mbps, fill = year, color = year)) +
-    geom_density(alpha = 0.35, linewidth = 0.6) +
-    scale_x_continuous(limits = c(0, 300),
-                       labels = label_number(suffix = " Mbps")) +
+#| fig-cap: "Download speed percentile spread by year (p10 / p25 / median / p75 / p90)"
+dist_stats <- dbGetQuery(con, "
+  SELECT
+      year,
+      PERCENTILE_CONT(0.10) WITHIN GROUP (ORDER BY avg_d_mbps) AS p10,
+      PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY avg_d_mbps) AS p25,
+      PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY avg_d_mbps) AS p50,
+      PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY avg_d_mbps) AS p75,
+      PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY avg_d_mbps) AS p90
+  FROM ookla_clean
+  GROUP BY year
+  ORDER BY year
+")
+dist_stats$year <- factor(dist_stats$year)
+
+ggplot(dist_stats, aes(x = year)) +
+    geom_boxplot(
+        aes(ymin = p10, lower = p25, middle = p50, upper = p75, ymax = p90),
+        stat = "identity", fill = SITE_BLUE, color = "#0d3d6b",
+        alpha = 0.45, width = 0.45
+    ) +
+    scale_y_continuous(labels = label_number(suffix = " Mbps")) +
     labs(
         title = "Mobile Download Speed Distribution by Year",
-        x = "Download Speed (Mbps)", y = "Density",
-        fill = "Year", color = "Year"
+        subtitle = "Box: p25–p75; whiskers: p10–p90; line: median",
+        x = "Year", y = "Download Speed (Mbps)"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## High vs. Low Speed Tiles
@@ -101,17 +133,25 @@ Classify tiles into speed tiers and track their share over time:
 ```{r}
 #| label: fig-speed-tiers
 #| fig-cap: "Share of tiles by speed tier over time"
-tiers <- df |>
-    mutate(tier = case_when(
-        avg_d_mbps <  10  ~ "< 10 Mbps (poor)",
-        avg_d_mbps <  25  ~ "10–25 Mbps (basic)",
-        avg_d_mbps < 100  ~ "25–100 Mbps (good)",
-        TRUE              ~ "> 100 Mbps (excellent)"
-    )) |>
-    group_by(period_start, tier) |>
-    summarise(n = n(), .groups = "drop") |>
+tiers <- dbGetQuery(con, "
+  SELECT
+      period_start,
+      CASE
+          WHEN avg_d_mbps <  10  THEN '< 10 Mbps (poor)'
+          WHEN avg_d_mbps <  25  THEN '10–25 Mbps (basic)'
+          WHEN avg_d_mbps < 100  THEN '25–100 Mbps (good)'
+          ELSE '> 100 Mbps (excellent)'
+      END AS tier,
+      COUNT(*) AS n
+  FROM ookla_clean
+  GROUP BY period_start, tier
+  ORDER BY period_start
+")
+tiers$period_start <- as.Date(tiers$period_start)
+tiers <- tiers |>
     group_by(period_start) |>
-    mutate(share = n / sum(n))
+    mutate(share = n / sum(n)) |>
+    ungroup()
 
 tier_order <- c("< 10 Mbps (poor)", "10–25 Mbps (basic)",
                 "25–100 Mbps (good)", "> 100 Mbps (excellent)")
@@ -121,12 +161,12 @@ ggplot(tiers, aes(x = period_start, y = share, fill = tier)) +
     geom_area(position = "stack", alpha = 0.85) +
     scale_y_continuous(labels = percent) +
     scale_x_date(date_labels = "%b %Y", date_breaks = "3 months") +
-    scale_fill_brewer(palette = "RdYlGn") +
+    scale_fill_manual(values = SPEED_TIER_COLORS) +
     labs(
         title = "US Mobile Speed Tier Distribution Over Time",
         x = NULL, y = "Share of Tiles", fill = "Tier"
     ) +
-    theme_minimal()
+    theme_site()
 ```
 
 ## Problems

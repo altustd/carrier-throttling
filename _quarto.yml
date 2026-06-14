@@ -1,15 +1,13 @@
 project:
   type: book
-  output-dir: _book
+  output-dir: docs
 
 book:
   title: "Carrier Throttling Analysis"
   subtitle: "Mobile Broadband Performance and Data Cap Behavior in the US"
   author: "Troy Altus"
-  date: today
-  date-format: "YYYY"
-  search: true
-
+  date: "2026"
+  repo-url: https://github.com/altustd/carrier-throttling
   chapters:
     - index.qmd
     - part: "Part I: Data"
@@ -27,5 +25,27 @@ engine: knitr
 format:
   html:
     theme: cosmo
-    code-fold: true
     toc: true
+    toc-depth: 3
+    number-sections: true
+    fig-align: center
+  pdf:
+    pdf-engine: latexmk
+    pdf-engine-opts:
+      - -lualatex
+    documentclass: book
+    classoption: [letterpaper, 11pt]
+    geometry:
+      - top=1in
+      - bottom=1in
+      - left=1.25in
+      - right=1in
+    number-sections: true
+    colorlinks: true
+    toc: true
+    toc-depth: 3
+
+execute:
+  warning: false
+  message: false
+  echo: false

@@ -7,3 +7,8 @@ renv/staging/
 .RData
 *.duckdb
 *.duckdb.wal
+
+/.quarto/
+**/*.quarto_ipynb
+*.fdb_latexmk
+*.fls
