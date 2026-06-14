@@ -115,15 +115,3 @@ dbGetQuery(con, "
   ORDER BY year, quarter
 ")
 ```
-
-## Problems
-
-1. What fraction of rows were removed by the `tests >= 3` filter?
-   Is that filter appropriate — what is the tradeoff?
-
-2. Plot a histogram of `avg_d_mbps` before and after outlier removal
-   for one quarter of your choice.
-
-3. Look up the Bing Maps quadkey spec. What geographic area does zoom
-   level 16 cover? How does that compare to a typical cell tower coverage
-   radius (~1–2 km)?

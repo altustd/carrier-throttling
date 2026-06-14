@@ -168,15 +168,3 @@ ggplot(tiers, aes(x = period_start, y = share, fill = tier)) +
     ) +
     theme_site()
 ```
-
-## Problems
-
-1. The FCC defines "broadband" as 25 Mbps down / 3 Mbps up (recently proposed
-   to raise to 100/20). What share of tiles meet each threshold in each quarter?
-
-2. Fit a simple linear regression of `avg_d_mbps ~ period_start`. What is the
-   estimated quarterly improvement in Mbps? Is this statistically significant?
-
-3. Compute the ratio `avg_d_mbps / avg_u_mbps` (download-to-upload ratio) per
-   tile. How does this ratio vary by speed tier? What does an unusually high
-   ratio suggest about the network?

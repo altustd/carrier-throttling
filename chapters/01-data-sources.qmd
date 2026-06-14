@@ -99,10 +99,3 @@ ORDER BY year, quarter;
 Ookla tiles use the [Bing Maps quadkey](https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system)
 system at zoom level 16. Each tile covers roughly 600m × 600m at mid-latitudes.
 The `sf` package can convert these to geometries for spatial joins.
-
-## Problems
-
-1. How many unique tiles appear in every quarter of the dataset (consistent coverage)?
-2. Which quarter has the highest average test count per tile?
-3. Run `aws s3 ls s3://ookla-open-data/parquet/performance/type=fixed/ --no-sign-request`
-   and compare the fixed broadband schema to the mobile schema.

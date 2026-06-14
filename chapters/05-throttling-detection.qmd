@@ -191,16 +191,3 @@ app-specific or user-level throttling:
 #                     project = "your-project-id",
 #                     dataset = "measurement-lab.ndt")
 ```
-
-## Problems
-
-1. Apply `cpt.meanvar()` instead of `cpt.mean()` — does it detect additional
-   breakpoints? What does a mean+variance change suggest vs. mean-only?
-
-2. Look up the dates of the T-Mobile/Sprint merger completion and T-Mobile's
-   5G mid-band rollout milestones. Do any detected change-points align?
-
-3. Design a study using the Wehe dataset to test whether YouTube traffic is
-   throttled differently than a generic HTTPS download on the same carrier.
-   What statistical test would you use? What confounders would you need to
-   control for?

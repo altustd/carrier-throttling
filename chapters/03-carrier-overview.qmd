@@ -137,17 +137,3 @@ ggplot(pctiles, aes(x = period_start)) +
     ) +
     theme_site()
 ```
-
-## Problems
-
-1. Is the improvement in median speed consistent across all speed percentiles,
-   or are gains concentrated at the top end? What does that tell you about
-   coverage equity?
-
-2. The tile dataset aggregates all carriers. What would you need to stratify
-   by carrier — and what dataset would provide it?
-
-3. Research the US mobile carrier market share for 2022–2024. Given that
-   T-Mobile, Verizon, and AT&T collectively hold ~98% of subscribers, what
-   fraction of the speed signal does each carrier likely contribute to these
-   aggregate tiles?
