@@ -24,31 +24,48 @@ con <- dbConnect(duckdb::duckdb(), dbdir = "../data/carrier.duckdb")
 
 ## What is a Quadkey?
 
-Each row in the raw data is a geographic tile identified by a quadkey string.
-To filter to the US we need tile geometries. The `quadkey` package decodes
-these to bounding boxes.
+Each row in the raw data is a geographic tile identified by a quadkey string —
+a [Bing Maps quadkey](https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system)
+at zoom level 16 (~600m tiles). Each of the 16 characters is a base-4 digit
+(0–3) that encodes one bit of the tile's X coordinate and one bit of its Y
+coordinate. Decoding all 16 digits gives `tile_x` and `tile_y`, which convert
+to a longitude/latitude via the standard Web Mercator tile formula.
 
-```{r}
-#| label: install-quadkeyr
-#| eval: false
-# Install once — not on CRAN, install from GitHub
-# remotes::install_github("PabloRMira1/quadkeyr")
-```
+## Decoding Quadkeys to Coordinates and Filtering to the US
+
+We decode `quadkey` to `tile_x`/`tile_y` (bit 0 of each digit → X, bit 1 → Y),
+convert to the tile center `lon`/`lat`, and keep only tiles inside CONUS,
+Alaska, or Hawaii bounding boxes. (This excludes Puerto Rico and other
+territories — a known limitation, noted in the Discussion.)
 
 ```{r}
 #| label: us-filter
-# A lightweight alternative: filter by quadkey prefix
-# US mainland quadkeys at zoom 4 start with: 0, 1, 2, 3 (western hemisphere)
-# A practical approach: keep tiles with avg_d_kbps > 0 and
-# join to a US bounding box via quadkey decode
-
-# For simplicity we use DuckDB's string operations to filter
-# to known US quadkey prefixes at zoom level 4
-# (covers CONUS, AK, HI with prefixes 0-3 at z4)
 dbExecute(con, "
   CREATE OR REPLACE TABLE ookla_us AS
+  WITH coords AS (
+      SELECT
+          *,
+          list_dot_product(
+              list_transform(str_split(quadkey, ''), x -> CAST(x AS INTEGER) & 1),
+              [32768,16384,8192,4096,2048,1024,512,256,128,64,32,16,8,4,2,1]
+          ) AS tile_x,
+          list_dot_product(
+              list_transform(str_split(quadkey, ''), x -> (CAST(x AS INTEGER) >> 1) & 1),
+              [32768,16384,8192,4096,2048,1024,512,256,128,64,32,16,8,4,2,1]
+          ) AS tile_y
+      FROM ookla_mobile
+  ),
+  lonlat AS (
+      SELECT
+          *,
+          360.0 * ((tile_x * 256 + 128) / 16777216.0 - 0.5) AS lon,
+          90 - 360 * ATAN(EXP(-(0.5 - (tile_y * 256 + 128) / 16777216.0) * 2 * PI())) / PI() AS lat
+      FROM coords
+  )
   SELECT
       quadkey,
+      lon,
+      lat,
       avg_d_kbps / 1000.0                     AS avg_d_mbps,
       avg_u_kbps / 1000.0                     AS avg_u_mbps,
       avg_lat_ms,
@@ -57,9 +74,14 @@ dbExecute(con, "
       year,
       quarter,
       MAKE_DATE(year, (quarter - 1) * 3 + 1, 1) AS period_start
-  FROM ookla_mobile
+  FROM lonlat
   WHERE avg_d_kbps > 0
     AND tests >= 3
+    AND (
+          (lon BETWEEN -125    AND -66.5  AND lat BETWEEN 24   AND 49.5)  -- CONUS
+       OR (lon BETWEEN -170    AND -129   AND lat BETWEEN 51   AND 72)    -- Alaska
+       OR (lon BETWEEN -160.5  AND -154.5 AND lat BETWEEN 18.5 AND 22.5)  -- Hawaii
+        )
 ")
 cat("Rows in ookla_us:", dbGetQuery(con, "SELECT COUNT(*) AS n FROM ookla_us")$n)
 ```
