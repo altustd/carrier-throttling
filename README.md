@@ -27,6 +27,17 @@ Does your carrier throttle "unlimited" data after a usage threshold? This projec
 
 ---
 
+## Known Issues
+
+- **Stale rendered output:** `chapters/02-data-preparation.qmd` was fixed
+  (2026-06-14) to add a real US bounding-box filter to `ookla_us` (CONUS/AK/HI;
+  previously `ookla_us` was unfiltered global data, ~87% non-US). The
+  `docs/` HTML/PDF and committed figures still reflect the old global numbers
+  until the project is re-rendered. Re-rendering requires rebuilding the
+  `renv` environment (`renv.lock` is stale — only `renv` itself is locked;
+  `sf`/`arrow`/`duckdb` also need GDAL/GEOS/PROJ/UDUNITS/Arrow C++ via
+  Homebrew, not currently installed).
+
 ## Run Locally
 
 ```bash
